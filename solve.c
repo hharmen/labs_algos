@@ -16,23 +16,25 @@ Node* New_Node(int64_t value){
 	return new_node;
 }
 
-void Add(Node* node, int64_t value){
+Node* Add(Node* node, int64_t value){
+	if (node == NULL){
+		node = New_Node(value);
+		return node;
+	}
 	if (value > node->key){
 		if (node->right != NULL){
-			Add(node->right, value);
-			return;
+			node->right = Add(node->right, value);
+			return node;
 		}
 		node->right = New_Node(value);
-		return;
 	}else if (value < node->key){
 		if (node->left != NULL){
-			Add(node->left, value);
-			return;
+			node-> left = Add(node->left, value);
+			return node;
 		}
 		node->left = New_Node(value);
-		return;
 	}
-	return;
+	return node;
 }
 
 void RemoveTree(Node* node){
@@ -194,17 +196,92 @@ void PrintTree(Node* node, int64_t depth){
 	PrintTree(node->left, depth+1);
 }
 
-int64_t main(){
-	Node* node = New_Node(10);
-	Add(node, 5);
-	Add(node, 12);
-	Add(node, 11);
-	Add(node, 19);
-	Add(node, 2);
-	Add(node, 4);
-	Add(node, 7);
-	Add(node, 6);
+void SolveVar15(Node* node, int64_t* widths, int64_t depth){
+	if (node == NULL){
+		return;
+	}
+	widths[depth] += 1;
+	SolveVar15(node->left, widths, depth+1);
+	SolveVar15(node->right, widths, depth+1);
+}
+
+int main(){
+
+	Node* node = NULL;
 	PrintTree(node, 0);
-	node = PopInTree(node, 12);
-	PrintTree(node, 0);
+	
+	while (1) {
+		int32_t exec_variant;
+		printf("1. Добавить число\n");
+		printf("2. Удалить число\n");
+		printf("3. Вывести дерево\n");
+		printf("4. Решить задачу (варант 15)\n");
+		printf("5. Выйти из программы\n");
+		printf("Выберите вариант (введите только цифру): ");
+
+		if (scanf("%d", &exec_variant) != 1){
+			printf("========================\n");
+			printf("НАХРЕНА ТЫ ВЕЛ ЧТО-ТО ЕЩЕ КРОМЕ ЧИСЛА\n");
+			printf("========================\n");
+			while (getchar() != '\n');
+			continue;
+		}
+
+		int64_t value;
+
+		switch (exec_variant){
+			case 1:
+                printf("Введите число для добавления: ");
+                if (!scanf("%lld", &value)) {
+					printf("========================\n");
+                    printf("ТЫ НЕ ЗНАЕШЬ КАК ВЫГЛЯДИТ ЧИСЛА?\n");
+					printf("========================\n");
+					while (getchar() != '\n');
+                    continue;
+                }
+                node = Add(node, value);
+                printf("Число %lld добавлено (если его уже не было конечно)\n", value);
+                break;
+			case 2:
+                printf("Введите число для удаления: ");
+                if (!scanf("%lld", &value)) {
+					printf("========================\n");
+                    printf("ТЫ НЕ ЗНАЕШЬ КАК ВЫГЛЯДИТ ЧИСЛА?\n");
+					printf("========================\n");
+					while (getchar() !=  '\n');
+                    continue;
+                }
+                node = PopInTree(node, value);
+                printf("Число %lld удалено (если он был конечно)\n", value);
+                break;
+			case 3:
+				printf("========================\n");
+				PrintTree(node, 0);
+				printf("========================\n");
+				break;
+			case 4:
+				int64_t depth = DepthTree(node);
+				int64_t* widths = (int64_t*)calloc(depth, sizeof(int64_t));
+				SolveVar15(node, widths, 0);
+				int64_t res = 0;
+				for (int64_t i = 0; i < depth; i++){
+					if (res < widths[i]){
+						res = widths[i];
+					}
+				}
+				free(widths);
+				printf("========================\n");
+				printf("Ответ на задание: %lld\n", res);
+				printf("========================\n");
+				break;
+			case 5:
+				RemoveTree(node);
+				return 0;
+			default:
+				printf("========================\n");
+				printf("НЕТ ТАКОГО ДЕЙСТВИЯ\n");
+				printf("========================\n");
+		}
+	}
+
 }
