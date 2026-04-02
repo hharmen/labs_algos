@@ -1,287 +1,167 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
 #include <stdint.h>
 
-typedef struct Node{
-	int64_t key;
-	struct Node* left;
-	struct Node* right;
-} Node;
+#define MAX_DATA_LEN 256
 
-Node* New_Node(int64_t value){
-	Node* new_node = (Node*)malloc(sizeof(Node));
-	new_node->key = value;
-	new_node->right = NULL;
-	new_node->left = NULL;
-	return new_node;
+typedef struct {
+    double key;
+    char data[MAX_DATA_LEN];
+} Element;
+
+int64_t integer_log2(uint64_t n) {
+    if (n == 0) return -1;
+    int64_t log = 0;
+    while (n >>= 1) log++;
+    return log;
 }
 
-Node* Add(Node* node, int64_t value){
-	if (node == NULL){
-		node = New_Node(value);
-		return node;
-	}
-	if (value > node->key){
-		if (node->right != NULL){
-			node->right = Add(node->right, value);
-			return node;
-		}
-		node->right = New_Node(value);
-	}else if (value < node->key){
-		if (node->left != NULL){
-			node-> left = Add(node->left, value);
-			return node;
-		}
-		node->left = New_Node(value);
-	}
-	return node;
+int64_t integer_pow(int64_t base, int64_t exp) {
+    int64_t res = 1;
+    for (int64_t i = 0; i < exp; i++) res *= base;
+    return res;
 }
 
-void RemoveTree(Node* node){
-	if (node == NULL){
-		return;
-	}
-	RemoveTree(node->right);
-	RemoveTree(node->left);
-	free(node);
+void print_table(Element arr[], int64_t n, char* title) {
+    printf("\n%s\n", title);
+    printf("------------------------------------------------\n");
+    for (int64_t i = 0; i < n; i++) {
+        printf("%lld: key = %g, data = \"%s\"\n", i, arr[i].key, arr[i].data);
+    }
+    printf("------------------------------------------------\n");
 }
 
-Node* AreNodeInTree(Node* node, int64_t value){
-	if (node == NULL){ 
-		return NULL;
-	}
-	if (value == node->key){
-		return node;
-	}
-	if (value < node->key){
-		return AreNodeInTree(node->left, value);
-	}
-	return AreNodeInTree(node->right, value);
-
+void print_keys(Element arr[], int64_t n) {
+    for (int64_t i = 0; i < n; i++) {
+        printf("%g", arr[i].key);
+        if (i < n - 1) printf(" ");
+    }
+    printf("\n");
 }
 
-Node* PopInTree(Node* node, int64_t value){
-	if (!AreNodeInTree(node, value)){
-		return node;
-	}
+void shell_sort(Element arr[], int64_t n) {
+    if (n <= 1) return;
 
-	if (node->key == value){
-		if (node->right == NULL && node->left == NULL){
-			free(node);
-			return NULL;
-		}
-		if (node->right == NULL){
-			Node* new_node = node->left;
-			free(node);
-			return new_node;
-		}
-		if (node->left == NULL){
-			Node* new_node = node->right;
-			free(node);
-			return new_node;
-		}
-		Node* new_node = node->left;
-		Node* prev_node = node;
-		if (new_node->right == NULL){
-			new_node->right = node->right;
-			free(node);
-			return new_node;
-		}
-		while (new_node->right != NULL){
-			prev_node = new_node;
-			new_node = new_node->right;
-		}
+    int64_t len_steps = integer_log2(n);
+    int64_t steps[len_steps];
+    int64_t k = integer_pow(2, len_steps);
+    for (int64_t i = 0; i < len_steps; i++) {
+        steps[i] = k - 1;
+        k /= 2;
+    }
 
-		prev_node->right = new_node->left;
-		new_node->right = node->right;
-		new_node->left = node->left;
-		free(node);
-		return new_node;
-		
-	}
-	
-	Node* need_to_remove_node = node;
-	Node* prev_node;
-	int64_t left_or_right;
+    for (int64_t s = 0; s < len_steps; s++) {
+        int64_t step = steps[s];
+        if (step >= n) continue;
 
-	while (need_to_remove_node->key != value){
-		prev_node = need_to_remove_node;
-		if (need_to_remove_node->key > value){
-			need_to_remove_node = need_to_remove_node->left;
-			left_or_right = 0;
-		}else{
-			need_to_remove_node = need_to_remove_node->right;
-			left_or_right = 1;
-		}
-	}
+        for (int64_t i = step; i < n; i++) {
+            Element temp = arr[i];
+            int64_t j = i;
+            while (j >= step && arr[j - step].key > temp.key) {
+                arr[j] = arr[j - step];
+                j -= step;
+            }
+            arr[j] = temp;
+        }
 
-	
-	if (need_to_remove_node->right == NULL && need_to_remove_node->left == NULL){
-		if (left_or_right){
-			prev_node->right = NULL;
-		}else{
-			prev_node->left = NULL;
-		}
-		free(need_to_remove_node);
-		return node;
-	}
-	if (need_to_remove_node->right == NULL){
-		if (left_or_right){
-			prev_node->right = need_to_remove_node->left;
-		}else{
-			prev_node->left = need_to_remove_node->left;
-		}
-		free(need_to_remove_node);
-		return node;
-	}
-	if (need_to_remove_node->left == NULL){
-		if (left_or_right){
-			prev_node->right = need_to_remove_node->right;
-		}else{
-			prev_node->left = need_to_remove_node->right;
-		}
-		free(need_to_remove_node);
-		return node;
-	}
-
-	Node* new_node = need_to_remove_node->right;
-	Node* prev_node_for_new = need_to_remove_node;
-	if (new_node->left == NULL){
-		new_node->left = need_to_remove_node->left;
-		if (left_or_right){
-			prev_node->right = new_node;
-		}else{
-			prev_node->left = new_node;
-		}
-		free(need_to_remove_node);
-		return node;
-
-	}
-	while (new_node->left != NULL){
-		prev_node_for_new = new_node;
-		new_node = new_node->left;
-	}
-
-	if (left_or_right){
-		prev_node->right = new_node;
-	}else{
-		prev_node->left = new_node;
-	}
-	prev_node_for_new->left = new_node->right;
-	new_node->right = need_to_remove_node->right;
-	new_node->left = need_to_remove_node->left;
-	free(need_to_remove_node);
-	return node;
-	
+        printf("После шага %lld:\n", step);
+        print_keys(arr, n);
+    }
 }
 
-int64_t DepthTree(Node* node){
-	if (node == NULL){
-		return 0;
-	}
-	int64_t depth_left = DepthTree(node->left);
-	int64_t depth_right = DepthTree(node->right);
-	return (depth_left > depth_right ? depth_left : depth_right)+1;
+int64_t binary_search(const Element arr[], int64_t n, double key) {
+    int64_t left = 0, right = n - 1;
+    while (left <= right) {
+        int64_t mid = (left + right) / 2;
+        if (arr[mid].key == key) return mid;
+        else if (arr[mid].key < key) left = mid + 1;
+        else right = mid - 1;
+    }
+    return -1;
 }
 
-void PrintTree(Node* node, int64_t depth){
-	if (node == NULL){
-		return;
-	}
-	PrintTree(node->right, depth+1);
-	for (int64_t i = 0; i<depth; i++){
-		printf("  ");
-	}
-	printf("%ld\n", node->key);
-	PrintTree(node->left, depth+1);
+Element* read_table_from_stdin(int64_t* n) {
+    Element* arr = NULL;
+    int64_t capacity = 16;
+    int64_t size = 0;
+    arr = (Element*)malloc(capacity * sizeof(Element));
+    if (!arr) return NULL;
+
+    char buffer[MAX_DATA_LEN];
+    while (fgets(buffer, sizeof(buffer), stdin)) {
+        buffer[strcspn(buffer, "\n")] = '\0';
+        if (strlen(buffer) == 0) continue;
+
+        char* space = buffer;
+        while (*space && !isspace(*space)) space++;
+        if (*space == '\0') {
+            printf("Обязателен пробел между ключом и значением\n");
+            free(arr);
+            return NULL;
+        }
+        *space = '\0';
+        double key = atof(buffer);
+        *space = ' ';
+        char* data_start = space + 1;
+        while (*data_start && isspace(*data_start)) data_start++;
+
+        if (size >= capacity) {
+            capacity *= 2;
+            Element* new_arr = (Element*)realloc(arr, capacity * sizeof(Element));
+            if (!new_arr) {
+                free(arr);
+                return NULL;
+            }
+            arr = new_arr;
+        }
+        arr[size].key = key;
+        strncpy(arr[size].data, data_start, MAX_DATA_LEN - 1);
+        arr[size].data[MAX_DATA_LEN - 1] = '\0';
+        size++;
+    }
+    *n = size;
+    return arr;
 }
 
-void SolveVar15(Node* node, int64_t* widths, int64_t depth){
-	if (node == NULL){
-		return;
-	}
-	widths[depth] += 1;
-	SolveVar15(node->left, widths, depth+1);
-	SolveVar15(node->right, widths, depth+1);
-}
+int main() {
+    int64_t n = 0;
+    Element* table = read_table_from_stdin(&n);
+    if (!table || n == 0) {
+        printf("Не удалось прочитать таблицу НОРМАЛЬНЫЕ ДАННЫЕ ВЕСТИ НЕ МОЖЕШЬ?????.\n");
+        return 1;
+    }
 
-int main(){
+    print_table(table, n, "Исходная таблица:");
 
-	Node* node = NULL;
-	PrintTree(node, 0);
-	
-	while (1) {
-		int32_t exec_variant;
-		printf("1. Добавить число\n");
-		printf("2. Удалить число\n");
-		printf("3. Вывести дерево\n");
-		printf("4. Решить задачу (варант 15)\n");
-		printf("5. Выйти из программы\n");
-		printf("Выберите вариант (введите только цифру): ");
+    printf("\n--- НАЧАЛО СОРТИРОВКИ ШЕЛЛА ---\n");
+    shell_sort(table, n);
+    printf("--- СОРТИРОВКА ЗАВЕРШЕНА ---\n");
 
-		if (scanf("%d", &exec_variant) != 1){
-			printf("========================\n");
-			printf("НАХРЕНА ТЫ ВЕЛ ЧТО-ТО ЕЩЕ КРОМЕ ЧИСЛА\n");
-			printf("========================\n");
-			while (getchar() != '\n');
-			continue;
-		}
+    print_table(table, n, "Окончательная отсортированная таблица:");
 
-		int64_t value;
+    // Тут происходит магия, мы меняем поток ввода с файла на поток из терминала
+    if (freopen("/dev/tty", "r", stdin) == NULL) {
+        printf("Не получается переключиться на стандартный поток входа (ну который из терминала пишет пользователь).\n");
+    }
 
-		switch (exec_variant){
-			case 1:
-                printf("Введите число для добавления: ");
-                if (!scanf("%lld", &value)) {
-					printf("========================\n");
-                    printf("ТЫ НЕ ЗНАЕШЬ КАК ВЫГЛЯДИТ ЧИСЛА?\n");
-					printf("========================\n");
-					while (getchar() != '\n');
-                    continue;
-                }
-                node = Add(node, value);
-                printf("Число %lld добавлено (если его уже не было конечно)\n", value);
-                break;
-			case 2:
-                printf("Введите число для удаления: ");
-                if (!scanf("%lld", &value)) {
-					printf("========================\n");
-                    printf("ТЫ НЕ ЗНАЕШЬ КАК ВЫГЛЯДИТ ЧИСЛА?\n");
-					printf("========================\n");
-					while (getchar() !=  '\n');
-                    continue;
-                }
-                node = PopInTree(node, value);
-                printf("Число %lld удалено (если он был конечно)\n", value);
-                break;
-			case 3:
-				printf("========================\n");
-				PrintTree(node, 0);
-				printf("========================\n");
-				break;
-			case 4:
-				int64_t depth = DepthTree(node);
-				int64_t* widths = (int64_t*)calloc(depth, sizeof(int64_t));
-				SolveVar15(node, widths, 0);
-				int64_t res = 0;
-				for (int64_t i = 0; i < depth; i++){
-					if (res < widths[i]){
-						res = widths[i];
-					}
-				}
-				free(widths);
-				printf("========================\n");
-				printf("Ответ на задание: %lld\n", res);
-				printf("========================\n");
-				break;
-			case 5:
-				RemoveTree(node);
-				return 0;
-			default:
-				printf("========================\n");
-				printf("НЕТ ТАКОГО ДЕЙСТВИЯ\n");
-				printf("========================\n");
-		}
-	}
+    printf("\n=== ДВОИЧНЫЙ ПОИСК ===\n");
+    printf("Введите ключи для поиска (вещественные числа). 0 = выход.\n");
+    double key;
+    while (1) {
+        printf("Ключ: ");
+        if (scanf("%lf", &key) != 1) break;
+        if (key == 0.0) break;
+        int64_t idx = binary_search(table, n, key);
+        if (idx != -1) {
+            printf("НАЙДЕН: ключ = %lf, значение = \"%s\" (индекс %lld)\n",
+                   table[idx].key, table[idx].data, (int64_t)idx);
+        } else {
+            printf("Ключ %lf НЕ НАЙДЕН\n", key);
+        }
+    }
 
+    free(table);
+    return 0;
 }
