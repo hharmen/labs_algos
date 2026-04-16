@@ -1,167 +1,256 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <ctype.h>
-#include <stdint.h>
+#include <string.h>
 
-#define MAX_DATA_LEN 256
+typedef enum { NODE_NUM, NODE_VAR, NODE_OP } NodeType;
 
-typedef struct {
-    double key;
-    char data[MAX_DATA_LEN];
-} Element;
+typedef struct Node {
+    NodeType type;
+    union {
+        int num;          // число
+        char var;         // переменная (один символ)
+        char op;          // оператор '+', '-', '*', '/'
+    } data;
+    struct Node *left;
+    struct Node *right;
+} Node;
 
-int64_t integer_log2(uint64_t n) {
-    if (n == 0) return -1;
-    int64_t log = 0;
-    while (n >>= 1) log++;
-    return log;
+Node* parse_expression(const char **s);
+Node* parse_term(const char **s);
+Node* parse_factor(const char **s);
+void print_tree(Node *root, int level);
+void print_infix(Node *root);
+int precedence(char op);
+void print_infix_sub(Node *node, int parent_prec, int right_assoc);
+Node* remove_ones(Node *node);
+void free_tree(Node *root);
+void skip_spaces(const char **s);
+
+
+void skip_spaces(const char **s) {
+    while (**s == ' ') (*s)++;
 }
 
-int64_t integer_pow(int64_t base, int64_t exp) {
-    int64_t res = 1;
-    for (int64_t i = 0; i < exp; i++) res *= base;
-    return res;
+Node* make_num(int val) {
+    Node *n = (Node*)malloc(sizeof(Node));
+    n->type = NODE_NUM;
+    n->data.num = val;
+    n->left = n->right = NULL;
+    return n;
 }
 
-void print_table(Element arr[], int64_t n, char* title) {
-    printf("\n%s\n", title);
-    printf("------------------------------------------------\n");
-    for (int64_t i = 0; i < n; i++) {
-        printf("%lld: key = %g, data = \"%s\"\n", i, arr[i].key, arr[i].data);
+Node* make_var(char v) {
+    Node *n = (Node*)malloc(sizeof(Node));
+    n->type = NODE_VAR;
+    n->data.var = v;
+    n->left = n->right = NULL;
+    return n;
+}
+
+Node* make_op(char op, Node *left, Node *right) {
+    Node *n = (Node*)malloc(sizeof(Node));
+    n->type = NODE_OP;
+    n->data.op = op;
+    n->left = left;
+    n->right = right;
+    return n;
+}
+
+Node* parse_number(const char **s) {
+    int val = 0;
+    while (isdigit(**s)) {
+        val = val * 10 + (**s - '0');
+        (*s)++;
     }
-    printf("------------------------------------------------\n");
+    return make_num(val);
 }
 
-void print_keys(Element arr[], int64_t n) {
-    for (int64_t i = 0; i < n; i++) {
-        printf("%g", arr[i].key);
-        if (i < n - 1) printf(" ");
-    }
-    printf("\n");
+Node* parse_variable(const char **s) {
+    char v = **s;
+    (*s)++;
+    return make_var(v);
 }
 
-void shell_sort(Element arr[], int64_t n) {
-    if (n <= 1) return;
-
-    int64_t len_steps = integer_log2(n);
-    int64_t steps[len_steps];
-    int64_t k = integer_pow(2, len_steps);
-    for (int64_t i = 0; i < len_steps; i++) {
-        steps[i] = k - 1;
-        k /= 2;
-    }
-
-    for (int64_t s = 0; s < len_steps; s++) {
-        int64_t step = steps[s];
-        if (step >= n) continue;
-
-        for (int64_t i = step; i < n; i++) {
-            Element temp = arr[i];
-            int64_t j = i;
-            while (j >= step && arr[j - step].key > temp.key) {
-                arr[j] = arr[j - step];
-                j -= step;
-            }
-            arr[j] = temp;
-        }
-
-        printf("После шага %lld:\n", step);
-        print_keys(arr, n);
-    }
-}
-
-int64_t binary_search(const Element arr[], int64_t n, double key) {
-    int64_t left = 0, right = n - 1;
-    while (left <= right) {
-        int64_t mid = (left + right) / 2;
-        if (arr[mid].key == key) return mid;
-        else if (arr[mid].key < key) left = mid + 1;
-        else right = mid - 1;
-    }
-    return -1;
-}
-
-Element* read_table_from_stdin(int64_t* n) {
-    Element* arr = NULL;
-    int64_t capacity = 16;
-    int64_t size = 0;
-    arr = (Element*)malloc(capacity * sizeof(Element));
-    if (!arr) return NULL;
-
-    char buffer[MAX_DATA_LEN];
-    while (fgets(buffer, sizeof(buffer), stdin)) {
-        buffer[strcspn(buffer, "\n")] = '\0';
-        if (strlen(buffer) == 0) continue;
-
-        char* space = buffer;
-        while (*space && !isspace(*space)) space++;
-        if (*space == '\0') {
-            printf("Обязателен пробел между ключом и значением\n");
-            free(arr);
+Node* parse_factor(const char **s) {
+    skip_spaces(s);
+    if (**s == '(') {
+        (*s)++;
+        Node *expr = parse_expression(s);
+        skip_spaces(s);
+        if (**s == ')') {
+            (*s)++;
+        } else {
+            fprintf(stderr, "Ожидалась ')'\n");
+            free_tree(expr);
             return NULL;
         }
-        *space = '\0';
-        double key = atof(buffer);
-        *space = ' ';
-        char* data_start = space + 1;
-        while (*data_start && isspace(*data_start)) data_start++;
-
-        if (size >= capacity) {
-            capacity *= 2;
-            Element* new_arr = (Element*)realloc(arr, capacity * sizeof(Element));
-            if (!new_arr) {
-                free(arr);
-                return NULL;
-            }
-            arr = new_arr;
-        }
-        arr[size].key = key;
-        strncpy(arr[size].data, data_start, MAX_DATA_LEN - 1);
-        arr[size].data[MAX_DATA_LEN - 1] = '\0';
-        size++;
+        return expr;
+    } else if (isdigit(**s)) {
+        return parse_number(s);
+    } else if (isalpha(**s)) {
+        return parse_variable(s);
+    } else {
+        fprintf(stderr, "Неожиданный символ '%c'\n", **s);
+        return NULL;
     }
-    *n = size;
-    return arr;
+}
+
+Node* parse_term(const char **s) {
+    Node *left = parse_factor(s);
+    if (!left) return NULL;
+    skip_spaces(s);
+    while (**s == '*' || **s == '/') {
+        char op = **s;
+        (*s)++;
+        Node *right = parse_factor(s);
+        if (!right) {
+            free_tree(left);
+            return NULL;
+        }
+        left = make_op(op, left, right);
+        skip_spaces(s);
+    }
+    return left;
+}
+
+Node* parse_expression(const char **s) {
+    Node *left = parse_term(s);
+    if (!left) return NULL;
+    skip_spaces(s);
+    while (**s == '+' || **s == '-') {
+        char op = **s;
+        (*s)++;
+        Node *right = parse_term(s);
+        if (!right) {
+            free_tree(left);
+            return NULL;
+        }
+        left = make_op(op, left, right);
+        skip_spaces(s);
+    }
+    return left;
+}
+
+void print_tree(Node *root, int space) {
+    if (root == NULL) return;
+    int indent = space + 4;
+    print_tree(root->right, indent);
+    for (int i = 0; i < space; i++) printf(" ");
+    switch (root->type) {
+        case NODE_NUM: printf("%d\n", root->data.num); break;
+        case NODE_VAR: printf("%c\n", root->data.var); break;
+        case NODE_OP:  printf("%c\n", root->data.op); break;
+    }
+    print_tree(root->left, indent);
+}
+
+int precedence(char op) {
+    switch (op) {
+        case '+': case '-': return 1;
+        case '*': case '/': return 2;
+        default: return 0;
+    }
+}
+
+void print_infix_sub(Node *node, int parent_prec, int right_assoc) {
+    if (!node) return;
+    if (node->type == NODE_NUM) {
+        printf("%d", node->data.num);
+    } else if (node->type == NODE_VAR) {
+        printf("%c", node->data.var);
+    } else if (node->type == NODE_OP) {
+        int prec = precedence(node->data.op);
+        int need_paren = 0;
+        if (prec < parent_prec) need_paren = 1;
+        if (prec == parent_prec && right_assoc) need_paren = 1;
+
+        if (need_paren) printf("(");
+        print_infix_sub(node->left, prec, 0);
+        printf(" %c ", node->data.op);
+        int right_assoc_flag = (node->data.op == '-' || node->data.op == '/') ? 1 : 0;
+        print_infix_sub(node->right, prec, right_assoc_flag);
+        if (need_paren) printf(")");
+    }
+}
+
+void print_infix(Node *root) {
+    print_infix_sub(root, 0, 0);
+}
+
+
+Node* remove_ones(Node *node) {
+    if (!node) return NULL;
+    node->left = remove_ones(node->left);
+    node->right = remove_ones(node->right);
+
+    if (node->type == NODE_OP && node->data.op == '*') {
+        Node *left = node->left;
+        Node *right = node->right;
+
+
+        if (left->type == NODE_NUM && left->data.num == 1) {
+            free(left);
+            Node *result = right;
+            free(node);
+            return result;
+        }
+
+        if (right->type == NODE_NUM && right->data.num == 1) {
+            free(right);
+            Node *result = left;
+            free(node);
+            return result;
+        }
+
+        if (left->type == NODE_NUM && left->data.num == 1 &&
+            right->type == NODE_NUM && right->data.num == 1) {
+            free(left);
+            free(right);
+            Node *result = make_num(1);
+            free(node);
+            return result;
+        }
+    }
+    return node;
+}
+
+void free_tree(Node *root) {
+    if (!root) return;
+    free_tree(root->left);
+    free_tree(root->right);
+    free(root);
 }
 
 int main() {
-    int64_t n = 0;
-    Element* table = read_table_from_stdin(&n);
-    if (!table || n == 0) {
-        printf("Не удалось прочитать таблицу НОРМАЛЬНЫЕ ДАННЫЕ ВЕСТИ НЕ МОЖЕШЬ?????.\n");
-        return 1;
-    }
+    char line[1024];
+    printf("При вводе выражения не надо писать пробелы и обязательно нужно ставить все умножения, а не как в математике их пропускать\nВведите выражения (Ctrl+D для завершения):\n");
+    while (fgets(line, sizeof(line), stdin)) {
+        // Удаляем символ перевода строки
+        size_t len = strlen(line);
+        if (len > 0 && line[len-1] == '\n') line[len-1] = '\0';
+        if (strlen(line) == 0) continue;
 
-    print_table(table, n, "Исходная таблица:");
-
-    printf("\n--- НАЧАЛО СОРТИРОВКИ ШЕЛЛА ---\n");
-    shell_sort(table, n);
-    printf("--- СОРТИРОВКА ЗАВЕРШЕНА ---\n");
-
-    print_table(table, n, "Окончательная отсортированная таблица:");
-
-    // Тут происходит магия, мы меняем поток ввода с файла на поток из терминала
-    if (freopen("/dev/tty", "r", stdin) == NULL) {
-        printf("Не получается переключиться на стандартный поток входа (ну который из терминала пишет пользователь).\n");
-    }
-
-    printf("\n=== ДВОИЧНЫЙ ПОИСК ===\n");
-    printf("Введите ключи для поиска (вещественные числа). 0 = выход.\n");
-    double key;
-    while (1) {
-        printf("Ключ: ");
-        if (scanf("%lf", &key) != 1) break;
-        if (key == 0.0) break;
-        int64_t idx = binary_search(table, n, key);
-        if (idx != -1) {
-            printf("НАЙДЕН: ключ = %lf, значение = \"%s\" (индекс %lld)\n",
-                   table[idx].key, table[idx].data, (int64_t)idx);
-        } else {
-            printf("Ключ %lf НЕ НАЙДЕН\n", key);
+        const char *p = line;
+        Node *expr = parse_expression(&p);
+        if (!expr) {
+            printf("Ошибка разбора выражения.\n");
+            continue;
         }
-    }
 
-    free(table);
+        printf("\nИсходное выражение: ");
+        print_infix(expr);
+        printf("\nДерево исходного выражения:\n");
+        print_tree(expr, 0);
+
+        Node *transformed = remove_ones(expr);
+        printf("\nВыражение (без сомножителей 1): ");
+        print_infix(transformed);
+        printf("\nДерево преобразованного выражения:\n");
+        print_tree(transformed, 0);
+        printf("----------------------------------------\n");
+
+        free_tree(transformed);
+    }
     return 0;
 }
